@@ -96,6 +96,7 @@ end
 return function(build_specfication, _, tree)
   local results = {}
   local position = tree:data()
+  print("trDir: " .. vim.inspect(build_specfication.context.test_results_directory))
   local results_directory = build_specfication.context.test_results_directory
   local junit_reports = parse_xml_files_from_directory(results_directory)
 

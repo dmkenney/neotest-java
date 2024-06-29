@@ -10,11 +10,15 @@ local Job = require("plenary.job")
 --- @return string - absolute path to wrapper of binary name
 local function get_gradle_executable(project_directory)
   local gradle_wrapper_folder = lib.files.match_root_pattern("gradlew")(project_directory)
-
   if gradle_wrapper_folder ~= nil then
     return gradle_wrapper_folder .. lib.files.sep .. "gradlew"
   else
-    return "gradle"
+    local maven_wrapper_folder = lib.files.match_root_pattern("mvnw")(project_directory)
+    if maven_wrapper_folder ~= nil then
+      return maven_wrapper_folder .. lib.files.sep .. "mvnw"
+    else
+      return "gradle"
+    end
   end
 end
 
@@ -27,7 +31,7 @@ end
 --- @param gradle_executable string
 --- @param project_directory string
 --- @return string - absolute path of test results directory
-local function get_test_results_directory(gradle_executable, project_directory, gradle_task)
+local function get_gradle_test_results_directory(gradle_executable, project_directory, gradle_task)
   local command = {
     gradle_executable,
     "--project-dir",
@@ -46,6 +50,36 @@ local function get_test_results_directory(gradle_executable, project_directory, 
   end
 
   return ""
+end
+
+--- Runs the given Gradle executable in the respective project directory to
+--- query the `testResultsDir` property. Has to do some plain text parsing of
+--- the Gradle command output. The child folder named `test` is always added to
+--- this path.
+--- Is empty if directory could not be determined.
+---
+--- @param gradle_executable string
+--- @param project_directory string
+--- @return string - absolute path of test results directory
+local function get_maven_test_results_directory(gradle_executable, project_directory, gradle_task)
+  local command = {
+    gradle_executable,
+    "-f",
+    project_directory .. lib.files.sep .. "pom.xml",
+    "help:evaluate",
+    "-Dexpression=project.build.directory",
+    "-q",
+    "-DforceStdout",
+  }
+
+  local _, output = lib.process.run(command, { stdout = true })
+  print("output: " .. vim.inspect(output))
+
+  if gradle_task == "test" then
+    return output.stdout .. lib.files.sep .. "surefire-reports"
+  else
+    return output.stdout .. lib.files.sep .. "failsafe-reports"
+  end
 end
 
 --- Takes a NeoTest tree object and iterates over its positions. For each position
@@ -148,7 +182,7 @@ end
 --- @return nil | neotest.RunSpec | neotest.RunSpec[]
 return function(arguments)
   local position = arguments.tree:data()
-  local project_directory = lib.files.match_root_pattern("build.gradle", "build.gradle.kts")(position.path)
+  local project_directory = lib.files.match_root_pattern("build.gradle", "build.gradle.kts", "pom.xml")(position.path)
   local gradle_executable = get_gradle_executable(project_directory)
   local gradle_task = get_gradle_task(position.path)
 
@@ -156,8 +190,11 @@ return function(arguments)
   vim.list_extend(command_args, get_test_filter_arguments(arguments.tree, position))
 
   local context = {
-    test_results_directory = get_test_results_directory(gradle_executable, project_directory, gradle_task),
+    -- test_results_directory = get_gradle_test_results_directory(gradle_executable, project_directory, gradle_task),
+    test_results_directory = get_maven_test_results_directory(gradle_executable, project_directory, gradle_task),
   }
+
+  print("test results dir: " .. context.test_results_directory)
 
   if arguments.strategy == "dap" then
     table.insert(command_args, "--debug-jvm")

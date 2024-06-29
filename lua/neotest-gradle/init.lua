@@ -8,13 +8,13 @@ Adapter.name = "gradle-test"
 --- @async
 --- @param dir string @Directory to treat as cwd
 --- @return string | nil @Absolute root dir of test suite
-Adapter.root = lib.files.match_root_pattern("build.gradle", "build.gradle.kts")
+Adapter.root = lib.files.match_root_pattern("build.gradle", "build.gradle.kts", "pom.xml")
 
 --- @async
 --- @param file_path string
 --- @return boolean
 function Adapter.is_test_file(file_path)
-  local test_file_patterns = { "Test.java$", "IT.java$", "IntegrationTest.java$" }
+  local test_file_patterns = { "Test.java$", "Tests.java$", "IT.java$", "IntegrationTest.java$" }
   for _, pattern in pairs(test_file_patterns) do
     if file_path:match(pattern) then
       return true
@@ -33,7 +33,7 @@ function Adapter.discover_positions(path)
     ;; class_with_name_ending_in_test
     (
       (class_declaration name: (identifier) @namespace.name)
-      (#match? @namespace.name "(Test|IT|IntegrationTest)$")
+      (#match? @namespace.name "(Test|Tests|IT|IntegrationTest)$")
     ) @namespace.definition
 
     ;; method_with_test_marker
